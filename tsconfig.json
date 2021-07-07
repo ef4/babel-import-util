@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    // Compilation Configuration
+    "target": "es2015",
+    "module": "commonjs",
+    "inlineSources": true,
+    "inlineSourceMap": true,
+    "declaration": true,
+
+    // Environment Configuration
+    "experimentalDecorators": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+
+    // Enhance Strictness
+    "noUnusedLocals": true,
+    "noImplicitThis": true,
+    "noImplicitAny": true,
+    "suppressImplicitAnyIndexErrors": false,
+    "noUnusedParameters": true,
+    "strictNullChecks": true,
+    "allowUnreachableCode": false,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "strict": true,
+
+    "newLine": "LF",
+  },
+  "include": [
+    "./src/**/*.ts",
+    "./__tests__/**/*.ts",
+    "local-types.d.ts",
+  ],
+}
