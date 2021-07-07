@@ -3,13 +3,50 @@ import type * as t from '@babel/types';
 
 type BabelTypes = typeof t;
 
-export class ImportAdder {
+export class ImportUtil {
   constructor(private t: BabelTypes, private program: NodePath<t.Program>) {}
 
+  removeImport(moduleSpecifier: string, exportedName: string) {
+    for (let topLevelPath of this.program.get('body')) {
+      if (
+        !topLevelPath.isImportDeclaration() ||
+        topLevelPath.get('source').node.value !== moduleSpecifier
+      ) {
+        continue;
+      }
+
+      let importSpecifierPath = topLevelPath
+        .get('specifiers')
+        .find((specifierPath) =>
+          exportedName === 'default'
+            ? specifierPath.isImportDefaultSpecifier()
+            : specifierPath.isImportSpecifier() &&
+              name(specifierPath.node.imported) === exportedName
+        );
+      if (importSpecifierPath) {
+        if (topLevelPath.node.specifiers.length === 1) {
+          topLevelPath.remove();
+        } else {
+          importSpecifierPath.remove();
+        }
+      }
+    }
+  }
+
+  // Import the given value (if needed) and return an Identifier representing
+  // it.
   import(
+    // the spot at which you will insert the Identifier we return to you
     target: NodePath<t.Node>,
+
+    // the path to the module you're importing from
     moduleSpecifier: string,
+
+    // the name you're importing from that module (use "default" for the default
+    // export)
     exportedName: string,
+
+    // Optional hint for helping us pick a name for the imported binding
     nameHint?: string
   ): t.Identifier {
     let declaration = this.program

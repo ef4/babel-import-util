@@ -1,9 +1,9 @@
 import { allBabelVersions, runDefault } from './test-support';
-import { ImportAdder } from '../src/index';
+import { ImportUtil } from '../src/index';
 import type { NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
 
-function importAdderTests(transform: (code: string) => string) {
+function importUtilTests(transform: (code: string) => string) {
   const dependencies = {
     m: {
       thing(arg: string) {
@@ -139,10 +139,28 @@ function importAdderTests(transform: (code: string) => string) {
     expect(code).toMatch(/import \{ thing, thing as thing0 \} from ['"]m['"]/);
     expect(code.match(/import/g)?.length).toEqual(1);
   });
+
+  test('can remove one specifier', () => {
+    let code = transform(`
+      import { a, b } from 'whatever';
+      import other from 'x';
+    `);
+    expect(code).toMatch(/import \{ b \} from 'whatever'/);
+    expect(code).toMatch(/import other from 'x'/);
+  });
+
+  test('can remove whole statement', () => {
+    let code = transform(`
+      import { a } from 'whatever';
+      import other from 'x';
+    `);
+    expect(code).not.toMatch(/whatever/);
+    expect(code).toMatch(/import other from 'x'/);
+  });
 }
 
 interface State {
-  adder: ImportAdder;
+  adder: ImportUtil;
 }
 
 function testTransform(babel: { types: typeof t }): unknown {
@@ -150,7 +168,10 @@ function testTransform(babel: { types: typeof t }): unknown {
     visitor: {
       Program: {
         enter(path: NodePath<t.Program>, state: State) {
-          state.adder = new ImportAdder(babel.types, path);
+          state.adder = new ImportUtil(babel.types, path);
+        },
+        exit(_path: NodePath<t.Program>, state: State) {
+          state.adder.removeImport('whatever', 'a');
         },
       },
       CallExpression(path: NodePath<t.CallExpression>, state: State) {
@@ -176,6 +197,6 @@ describe('import-adder', () => {
         plugins: [testTransform],
       };
     },
-    createTests: importAdderTests,
+    createTests: importUtilTests,
   });
 });

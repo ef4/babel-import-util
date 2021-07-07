@@ -21,7 +21,9 @@
   },
   "main": "src/index.js",
   "files": [
-    "src/**/*.js"
+    "src/**/*.js",
+    "src/**/*.d.ts",
+    "src/**/*.js.map"
   ],
   "devDependencies": {
     "@babel/core": "^7.14.3",
