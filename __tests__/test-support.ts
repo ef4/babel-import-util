@@ -75,7 +75,7 @@ export function allBabelVersions(params: {
 
         return transform7(code, options7)!.code!;
       }
-      transform.babelMajorVersion = 7 as 7;
+      transform.babelMajorVersion = 7 as const;
       transform.usingPresets = usePresets;
       params.createTests(transform);
     });
