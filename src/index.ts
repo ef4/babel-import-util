@@ -63,7 +63,7 @@ export class ImportUtil {
             : spec.isImportSpecifier() && name(spec.node.imported) === exportedName
         ) as undefined | NodePath<t.ImportSpecifier> | NodePath<t.ImportDefaultSpecifier>;
       if (specifier && target.scope.getBinding(specifier.node.local.name)?.kind === 'module') {
-        return specifier.node.local;
+        return this.t.identifier(specifier.node.local.name);
       } else {
         return this.addSpecifier(target, declaration, exportedName, nameHint);
       }
