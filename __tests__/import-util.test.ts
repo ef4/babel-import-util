@@ -42,6 +42,16 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code).toMatch(/import myDefaultTarget from ['"]m['"]/);
   });
 
+  test('can generate a namespace import', () => {
+    let code = transform(`
+      export default function() {
+        return myNamespaceTarget.thing('a') + " " + myNamespaceTarget.default('b');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('you said: a. default said: b.');
+    expect(code).toMatch(/import \* as myNamespaceTarget from ['"]m['"]/);
+  });
+
   test('can use an optional name hint', () => {
     let code = transform(`
       export default function() {
@@ -157,6 +167,15 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code).not.toMatch(/whatever/);
     expect(code).toMatch(/import other from 'x'/);
   });
+
+  test('can remove namespace import', () => {
+    let code = transform(`
+      import * as a from 'remove-my-namespace';
+      import * as other from 'x';
+    `);
+    expect(code).not.toMatch(/remove-my-namespace/);
+    expect(code).toMatch(/import \* as other from 'x'/);
+  });
 }
 
 interface State {
@@ -172,6 +191,7 @@ function testTransform(babel: { types: typeof t }): unknown {
         },
         exit(_path: NodePath<t.Program>, state: State) {
           state.adder.removeImport('whatever', 'a');
+          state.adder.removeImport('remove-my-namespace', '*');
         },
       },
       CallExpression(path: NodePath<t.CallExpression>, state: State) {
@@ -184,6 +204,15 @@ function testTransform(babel: { types: typeof t }): unknown {
           callee.replaceWith(state.adder.import(callee, 'm', 'default'));
         } else if (callee.isIdentifier() && callee.node.name === 'myHintTarget') {
           callee.replaceWith(state.adder.import(callee, 'm', 'default', 'HINT'));
+        }
+      },
+      MemberExpression(path: NodePath<t.MemberExpression>, state: State) {
+        let obj = path.get('object');
+        if (!obj.isIdentifier()) {
+          return;
+        }
+        if (obj.node.name === 'myNamespaceTarget') {
+          obj.replaceWith(state.adder.import(obj, 'm', '*'));
         }
       },
     },

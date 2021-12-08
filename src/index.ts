@@ -17,12 +17,7 @@ export class ImportUtil {
 
       let importSpecifierPath = topLevelPath
         .get('specifiers')
-        .find((specifierPath) =>
-          exportedName === 'default'
-            ? specifierPath.isImportDefaultSpecifier()
-            : specifierPath.isImportSpecifier() &&
-              name(specifierPath.node.imported) === exportedName
-        );
+        .find((specifierPath) => matchSpecifier(specifierPath, exportedName));
       if (importSpecifierPath) {
         if (topLevelPath.node.specifiers.length === 1) {
           topLevelPath.remove();
@@ -42,8 +37,8 @@ export class ImportUtil {
     // the path to the module you're importing from
     moduleSpecifier: string,
 
-    // the name you're importing from that module (use "default" for the default
-    // export)
+    // the name you're importing from that module. Use "default" for the default
+    // export. Use "*" for the namespace.
     exportedName: string,
 
     // Optional hint for helping us pick a name for the imported binding
@@ -57,11 +52,7 @@ export class ImportUtil {
     if (declaration) {
       let specifier = declaration
         .get('specifiers')
-        .find((spec) =>
-          exportedName === 'default'
-            ? spec.isImportDefaultSpecifier()
-            : spec.isImportSpecifier() && name(spec.node.imported) === exportedName
-        ) as undefined | NodePath<t.ImportSpecifier> | NodePath<t.ImportDefaultSpecifier>;
+        .find((spec) => matchSpecifier(spec, exportedName));
       if (specifier && target.scope.getBinding(specifier.node.local.name)?.kind === 'module') {
         return this.t.identifier(specifier.node.local.name);
       } else {
@@ -89,16 +80,24 @@ export class ImportUtil {
     let local = this.t.identifier(
       unusedNameLike(target, desiredName(nameHint, exportedName, target))
     );
-    let specifier =
-      exportedName === 'default'
-        ? this.t.importDefaultSpecifier(local)
-        : this.t.importSpecifier(local, this.t.identifier(exportedName));
+    let specifier = this.buildSpecifier(exportedName, local);
     declaration.node.specifiers.push(specifier);
     declaration.scope.registerBinding(
       'module',
       declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath
     );
     return local;
+  }
+
+  private buildSpecifier(exportedName: string, localName: t.Identifier) {
+    switch (exportedName) {
+      case 'default':
+        return this.t.importDefaultSpecifier(localName);
+      case '*':
+        return this.t.importNamespaceSpecifier(localName);
+      default:
+        return this.t.importSpecifier(localName, this.t.identifier(exportedName));
+    }
   }
 }
 
@@ -123,7 +122,7 @@ function desiredName(nameHint: string | undefined, exportedName: string, target:
   if (nameHint) {
     return nameHint;
   }
-  if (exportedName === 'default') {
+  if (exportedName === 'default' || exportedName === '*') {
     if (target.isIdentifier()) {
       return target.node.name;
     } else {
@@ -131,5 +130,16 @@ function desiredName(nameHint: string | undefined, exportedName: string, target:
     }
   } else {
     return exportedName;
+  }
+}
+
+function matchSpecifier(spec: NodePath<any>, exportedName: string): boolean {
+  switch (exportedName) {
+    case 'default':
+      return spec.isImportDefaultSpecifier();
+    case '*':
+      return spec.isImportNamespaceSpecifier();
+    default:
+      return spec.isImportSpecifier() && name(spec.node.imported) === exportedName;
   }
 }
