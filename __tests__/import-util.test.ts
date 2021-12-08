@@ -150,6 +150,22 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code.match(/import/g)?.length).toEqual(1);
   });
 
+  test('can add a side-effect import', () => {
+    let code = transform(`
+      needsSideEffectThing();
+    `);
+    expect(code).toMatch(/import ['"]side-effect-thing['"]/);
+  });
+
+  test('side-effect import has no effect on existing import', () => {
+    let code = transform(`
+      import x from 'side-effect-thing';
+      needsSideEffectThing();
+    `);
+    expect(code).toMatch(/import x from ['"]side-effect-thing['"]/);
+    expect(code).not.toMatch(/import ['"]side-effect-thing['"]/);
+  });
+
   test('can remove one specifier', () => {
     let code = transform(`
       import { a, b } from 'whatever';
@@ -196,14 +212,19 @@ function testTransform(babel: { types: typeof t }): unknown {
       },
       CallExpression(path: NodePath<t.CallExpression>, state: State) {
         let callee = path.get('callee');
-        if (callee.isIdentifier() && callee.node.name === 'myTarget') {
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
           callee.replaceWith(state.adder.import(callee, 'm', 'thing'));
-        } else if (callee.isIdentifier() && callee.node.name === 'second') {
+        } else if (callee.node.name === 'second') {
           callee.replaceWith(state.adder.import(callee, 'n', 'thing'));
-        } else if (callee.isIdentifier() && callee.node.name === 'myDefaultTarget') {
+        } else if (callee.node.name === 'myDefaultTarget') {
           callee.replaceWith(state.adder.import(callee, 'm', 'default'));
-        } else if (callee.isIdentifier() && callee.node.name === 'myHintTarget') {
+        } else if (callee.node.name === 'myHintTarget') {
           callee.replaceWith(state.adder.import(callee, 'm', 'default', 'HINT'));
+        } else if (callee.node.name === 'needsSideEffectThing') {
+          state.adder.importForSideEffect('side-effect-thing');
         }
       },
       MemberExpression(path: NodePath<t.MemberExpression>, state: State) {
