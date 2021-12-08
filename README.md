@@ -68,6 +68,10 @@ class ImportUtil {
     nameHint?: string
   ): t.Identifier;
 
+  // If needed, adds a bare import like:
+  //    import "your-module";
+  importForSideEffect(moduleSpecifier: string): void;
+
   // Remove an import specifier. If the removed specifier is
   // the last one on the whole import statement, the whole
   // statement is also removed.
@@ -75,5 +79,10 @@ class ImportUtil {
   // You can use "default" and "*" as exportedName to handle
   // those special cases.
   removeImport(moduleSpecifier: string, exportedName: string): void;
+
+  // Remove all imports from the given moduleSpecifier. Unlike
+  // removeImport(), this can also remove "bare" import statements
+  //  that were purely for side effect.
+  removeAllImports(moduleSpecifier: string): void;
 }
 ```

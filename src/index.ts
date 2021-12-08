@@ -6,12 +6,11 @@ type BabelTypes = typeof t;
 export class ImportUtil {
   constructor(private t: BabelTypes, private program: NodePath<t.Program>) {}
 
-  removeImport(moduleSpecifier: string, exportedName: string) {
+  // remove one imported binding. If this is the last thing imported from the
+  // given moduleSpecifier, the whole statement will also be removed.
+  removeImport(moduleSpecifier: string, exportedName: string): void {
     for (let topLevelPath of this.program.get('body')) {
-      if (
-        !topLevelPath.isImportDeclaration() ||
-        topLevelPath.get('source').node.value !== moduleSpecifier
-      ) {
+      if (!matchModule(topLevelPath, moduleSpecifier)) {
         continue;
       }
 
@@ -24,6 +23,15 @@ export class ImportUtil {
         } else {
           importSpecifierPath.remove();
         }
+      }
+    }
+  }
+
+  // remove all imports from the given moduleSpecifier
+  removeAllImports(moduleSpecifier: string): void {
+    for (let topLevelPath of this.program.get('body')) {
+      if (matchModule(topLevelPath, moduleSpecifier)) {
+        topLevelPath.remove();
       }
     }
   }
@@ -44,11 +52,7 @@ export class ImportUtil {
     // Optional hint for helping us pick a name for the imported binding
     nameHint?: string
   ): t.Identifier {
-    let declaration = this.program
-      .get('body')
-      .find((elt) => elt.isImportDeclaration() && elt.node.source.value === moduleSpecifier) as
-      | undefined
-      | NodePath<t.ImportDeclaration>;
+    let declaration = this.findImportFrom(moduleSpecifier);
     if (declaration) {
       let specifier = declaration
         .get('specifiers')
@@ -67,6 +71,15 @@ export class ImportUtil {
         this.program.get(`body.0`) as NodePath<t.ImportDeclaration>,
         exportedName,
         nameHint
+      );
+    }
+  }
+
+  importForSideEffect(moduleSpecifier: string): void {
+    let declaration = this.findImportFrom(moduleSpecifier);
+    if (!declaration) {
+      this.program.node.body.unshift(
+        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
       );
     }
   }
@@ -98,6 +111,15 @@ export class ImportUtil {
       default:
         return this.t.importSpecifier(localName, this.t.identifier(exportedName));
     }
+  }
+
+  private findImportFrom(moduleSpecifier: string): NodePath<t.ImportDeclaration> | undefined {
+    for (let path of this.program.get('body')) {
+      if (path.isImportDeclaration() && path.node.source.value === moduleSpecifier) {
+        return path;
+      }
+    }
+    return undefined;
   }
 }
 
@@ -142,4 +164,11 @@ function matchSpecifier(spec: NodePath<any>, exportedName: string): boolean {
     default:
       return spec.isImportSpecifier() && name(spec.node.imported) === exportedName;
   }
+}
+
+function matchModule(
+  path: NodePath<any>,
+  moduleSpecifier: string
+): path is NodePath<t.ImportDeclaration> {
+  return path.isImportDeclaration() && path.get('source').node.value === moduleSpecifier;
 }
