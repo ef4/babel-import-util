@@ -63,9 +63,9 @@ export class ImportUtil {
         return this.addSpecifier(target, declaration, exportedName, nameHint);
       }
     } else {
-      this.program.node.body.unshift(
-        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
-      );
+      this.program.unshiftContainer('body', [
+        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier)),
+      ]);
       return this.addSpecifier(
         target,
         this.program.get(`body.0`) as NodePath<t.ImportDeclaration>,
@@ -78,9 +78,9 @@ export class ImportUtil {
   importForSideEffect(moduleSpecifier: string): void {
     let declaration = this.findImportFrom(moduleSpecifier);
     if (!declaration) {
-      this.program.node.body.unshift(
-        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
-      );
+      this.program.unshiftContainer('body', [
+        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier)),
+      ]);
     }
   }
 
@@ -94,7 +94,7 @@ export class ImportUtil {
       unusedNameLike(target, desiredName(nameHint, exportedName, target))
     );
     let specifier = this.buildSpecifier(exportedName, local);
-    declaration.node.specifiers.push(specifier);
+    declaration.pushContainer('specifiers', [specifier]);
     declaration.scope.registerBinding(
       'module',
       declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath
