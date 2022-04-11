@@ -192,6 +192,20 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code).not.toMatch(/remove-my-namespace/);
     expect(code).toMatch(/import \* as other from 'x'/);
   });
+
+  test("emitted imports get run through other plugin's ImportDeclaration hooks", () => {
+    let code = transform(`
+      changeMe()
+    `);
+    expect(code).toMatch(/from "ive-been-changed"/);
+  });
+
+  test("emitted side-effectful imports get run through other plugin's ImportDeclaration hooks", () => {
+    let code = transform(`
+      sideEffectChangeMe()
+    `);
+    expect(code).toMatch(/import "ive-been-changed"/);
+  });
 }
 
 interface State {
@@ -225,6 +239,10 @@ function testTransform(babel: { types: typeof t }): unknown {
           callee.replaceWith(state.adder.import(callee, 'm', 'default', 'HINT'));
         } else if (callee.node.name === 'needsSideEffectThing') {
           state.adder.importForSideEffect('side-effect-thing');
+        } else if (callee.node.name === 'changeMe') {
+          callee.replaceWith(state.adder.import(callee, 'change-me', 'default'));
+        } else if (callee.node.name === 'sideEffectChangeMe') {
+          state.adder.importForSideEffect('change-me');
         }
       },
       MemberExpression(path: NodePath<t.MemberExpression>, state: State) {
@@ -234,6 +252,11 @@ function testTransform(babel: { types: typeof t }): unknown {
         }
         if (obj.node.name === 'myNamespaceTarget') {
           obj.replaceWith(state.adder.import(obj, 'm', '*'));
+        }
+      },
+      ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
+        if (path.node.source.value === 'change-me') {
+          path.node.source.value = 'ive-been-changed';
         }
       },
     },
