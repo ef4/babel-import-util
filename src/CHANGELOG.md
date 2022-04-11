@@ -1,3 +1,7 @@
+# 1.2.0
+
+- BUGFIX: use Babel's container-aware methods to manipulate the set of import declarations and import specifiers
+
 # 1.1.0
 
 - FEATURE: add support for side-effectful imports
