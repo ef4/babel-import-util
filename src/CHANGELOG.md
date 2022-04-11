@@ -1,3 +1,7 @@
+# 1.2.1
+
+- BUGFIX: explicitly remove all import specifiers so that babel will cancel scheduled visits on them.
+
 # 1.2.0
 
 - BUGFIX: use Babel's container-aware methods to manipulate the set of import declarations and import specifiers
