@@ -193,6 +193,13 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code).toMatch(/import \* as other from 'x'/);
   });
 
+  test('can remove all imports', () => {
+    let code = transform(`
+      import 'remove-all';
+    `);
+    expect(code).not.toMatch(/remove-all/);
+  });
+
   test("emitted imports get run through other plugin's ImportDeclaration hooks", () => {
     let code = transform(`
       changeMe()
@@ -214,6 +221,22 @@ function importUtilTests(transform: (code: string) => string) {
     `);
     expect(code).toMatch(/changedTargetThing/);
   });
+
+  test("added and removed specifier doesn't break other plugins hooks", () => {
+    let code = transform(`
+      addAndRemove();
+    `);
+    expect(code).toMatch(/a\(\)/);
+    expect(code).not.toMatch(/import/);
+  });
+
+  test("added and removed specifier doesn't break other plugins hooks", () => {
+    let code = transform(`
+      addAndRemoveAll();
+    `);
+    expect(code).toMatch(/a\(\)/);
+    expect(code).not.toMatch(/import/);
+  });
 }
 
 interface State {
@@ -230,6 +253,7 @@ function testTransform(babel: { types: typeof t }): unknown {
         exit(_path: NodePath<t.Program>, state: State) {
           state.adder.removeImport('whatever', 'a');
           state.adder.removeImport('remove-my-namespace', '*');
+          state.adder.removeAllImports('remove-all');
         },
       },
       CallExpression(path: NodePath<t.CallExpression>, state: State) {
@@ -255,6 +279,10 @@ function testTransform(babel: { types: typeof t }): unknown {
           callee.replaceWith(
             state.adder.import(callee, 'test-import-specifier-handling', 'targetThing')
           );
+        } else if (callee.node.name === 'addAndRemove') {
+          callee.replaceWith(state.adder.import(callee, 'whatever', 'a'));
+        } else if (callee.node.name === 'addAndRemoveAll') {
+          callee.replaceWith(state.adder.import(callee, 'remove-all', 'a'));
         }
       },
       MemberExpression(path: NodePath<t.MemberExpression>, state: State) {
@@ -277,9 +305,11 @@ function testTransform(babel: { types: typeof t }): unknown {
             ? path.node.imported.value
             : path.node.imported.name;
         if (
-          value === 'targetThing' &&
+          // running this check unconditionally is important -- it is making
+          // sure that this plugin never sees a path with a missing parent.
           path.parent.type === 'ImportDeclaration' &&
-          path.parent.source.value === 'test-import-specifier-handling'
+          path.parent.source.value === 'test-import-specifier-handling' &&
+          value === 'targetThing'
         ) {
           path.node.imported = babel.types.identifier('changedTargetThing');
         }
