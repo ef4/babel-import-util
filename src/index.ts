@@ -18,10 +18,9 @@ export class ImportUtil {
         .get('specifiers')
         .find((specifierPath) => matchSpecifier(specifierPath, exportedName));
       if (importSpecifierPath) {
-        if (topLevelPath.node.specifiers.length === 1) {
+        importSpecifierPath.remove();
+        if (topLevelPath.node.specifiers.length === 0) {
           topLevelPath.remove();
-        } else {
-          importSpecifierPath.remove();
         }
       }
     }
@@ -31,6 +30,9 @@ export class ImportUtil {
   removeAllImports(moduleSpecifier: string): void {
     for (let topLevelPath of this.program.get('body')) {
       if (matchModule(topLevelPath, moduleSpecifier)) {
+        for (let specifier of topLevelPath.get('specifiers')) {
+          specifier.remove();
+        }
         topLevelPath.remove();
       }
     }
