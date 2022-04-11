@@ -206,6 +206,14 @@ function importUtilTests(transform: (code: string) => string) {
     `);
     expect(code).toMatch(/import "ive-been-changed"/);
   });
+
+  test("added specifiers get run through other plugin's ImportSpecifier hooks", () => {
+    let code = transform(`
+      import { other } from "test-import-specifier-handling";
+      addTargetThing();
+    `);
+    expect(code).toMatch(/changedTargetThing/);
+  });
 }
 
 interface State {
@@ -243,6 +251,10 @@ function testTransform(babel: { types: typeof t }): unknown {
           callee.replaceWith(state.adder.import(callee, 'change-me', 'default'));
         } else if (callee.node.name === 'sideEffectChangeMe') {
           state.adder.importForSideEffect('change-me');
+        } else if (callee.node.name === 'addTargetThing') {
+          callee.replaceWith(
+            state.adder.import(callee, 'test-import-specifier-handling', 'targetThing')
+          );
         }
       },
       MemberExpression(path: NodePath<t.MemberExpression>, state: State) {
@@ -257,6 +269,19 @@ function testTransform(babel: { types: typeof t }): unknown {
       ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
         if (path.node.source.value === 'change-me') {
           path.node.source.value = 'ive-been-changed';
+        }
+      },
+      ImportSpecifier(path: NodePath<t.ImportSpecifier>) {
+        let value =
+          path.node.imported.type === 'StringLiteral'
+            ? path.node.imported.value
+            : path.node.imported.name;
+        if (
+          value === 'targetThing' &&
+          path.parent.type === 'ImportDeclaration' &&
+          path.parent.source.value === 'test-import-specifier-handling'
+        ) {
+          path.node.imported = babel.types.identifier('changedTargetThing');
         }
       },
     },
