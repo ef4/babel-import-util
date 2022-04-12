@@ -18,9 +18,10 @@ export class ImportUtil {
         .get('specifiers')
         .find((specifierPath) => matchSpecifier(specifierPath, exportedName));
       if (importSpecifierPath) {
-        importSpecifierPath.remove();
-        if (topLevelPath.node.specifiers.length === 0) {
+        if (topLevelPath.node.specifiers.length === 1) {
           topLevelPath.remove();
+        } else {
+          importSpecifierPath.remove();
         }
       }
     }
@@ -30,9 +31,6 @@ export class ImportUtil {
   removeAllImports(moduleSpecifier: string): void {
     for (let topLevelPath of this.program.get('body')) {
       if (matchModule(topLevelPath, moduleSpecifier)) {
-        for (let specifier of topLevelPath.get('specifiers')) {
-          specifier.remove();
-        }
         topLevelPath.remove();
       }
     }
@@ -65,9 +63,9 @@ export class ImportUtil {
         return this.addSpecifier(target, declaration, exportedName, nameHint);
       }
     } else {
-      this.program.unshiftContainer('body', [
-        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier)),
-      ]);
+      this.program.node.body.unshift(
+        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
+      );
       return this.addSpecifier(
         target,
         this.program.get(`body.0`) as NodePath<t.ImportDeclaration>,
@@ -80,9 +78,9 @@ export class ImportUtil {
   importForSideEffect(moduleSpecifier: string): void {
     let declaration = this.findImportFrom(moduleSpecifier);
     if (!declaration) {
-      this.program.unshiftContainer('body', [
-        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier)),
-      ]);
+      this.program.node.body.unshift(
+        this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
+      );
     }
   }
 
@@ -96,7 +94,7 @@ export class ImportUtil {
       unusedNameLike(target, desiredName(nameHint, exportedName, target))
     );
     let specifier = this.buildSpecifier(exportedName, local);
-    declaration.pushContainer('specifiers', [specifier]);
+    declaration.node.specifiers.push(specifier);
     declaration.scope.registerBinding(
       'module',
       declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath
