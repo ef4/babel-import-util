@@ -62,6 +62,16 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code).toMatch(/import HINT from ['"]m['"]/);
   });
 
+  test('sanitizes name hint to make it a valid javascript identifier', () => {
+    let code = transform(`
+      export default function() {
+        return myMessyHintTarget('foo');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('default said: foo.');
+    expect(code).toMatch(/import thisIsTheHint from ['"]m['"]/);
+  });
+
   test('avoids an existing local binding', () => {
     let code = transform(`
       export default function() {
@@ -231,6 +241,8 @@ function testTransform(babel: { types: typeof t }): unknown {
           callee.replaceWith(state.adder.import(callee, 'm', 'default'));
         } else if (callee.node.name === 'myHintTarget') {
           callee.replaceWith(state.adder.import(callee, 'm', 'default', 'HINT'));
+        } else if (callee.node.name === 'myMessyHintTarget') {
+          callee.replaceWith(state.adder.import(callee, 'm', 'default', 'this-is: the hint!'));
         } else if (callee.node.name === 'needsSideEffectThing') {
           state.adder.importForSideEffect('side-effect-thing');
         }
