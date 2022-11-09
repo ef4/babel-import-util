@@ -142,7 +142,13 @@ function name(node: t.StringLiteral | t.Identifier): string {
 
 function desiredName(nameHint: string | undefined, exportedName: string, target: NodePath<t.Node>) {
   if (nameHint) {
-    return nameHint;
+    // first we opportunistically do camelization when an illegal character is
+    // followed by a lowercase letter, in an effort to aid readability of the
+    // output.
+    let cleaned = nameHint.replace(/[^a-zA-Z_]([a-z])/g, (_m, letter) => letter.toUpperCase());
+    // then we unliterally strip all remaining illegal characters.
+    cleaned = cleaned.replace(/[^a-zA-Z_]/g, '');
+    return cleaned;
   }
   if (exportedName === 'default' || exportedName === '*') {
     if (target.isIdentifier()) {
