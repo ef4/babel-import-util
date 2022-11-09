@@ -1,3 +1,7 @@
+# 1.3.0
+
+- FEATURE: automatically ensure that nameHints result in valid Javascript identifiers, so that callers don't need to bother about it.
+
 # 1.2.2
 
 - BUGFIX: reverting use of Babel's container-aware methods. They do indeed cause babel to schedule further processing of our emitted code, but unfortunately babel doesn't keep track of any intervening changes that are made by other plugins in between the time the work is scheduled and the time the work is done, meaning subsequent plugins can get handed totally invalid nodes that have already been removed from the tree.
