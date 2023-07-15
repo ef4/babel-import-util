@@ -2,6 +2,7 @@ import { allBabelVersions, runDefault } from './test-support';
 import { ImportUtil } from '../src/index';
 import type { NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
+import 'code-equality-assertions/jest';
 
 function importUtilTests(transform: (code: string) => string) {
   const dependencies = {
@@ -40,6 +41,40 @@ function importUtilTests(transform: (code: string) => string) {
       `);
     expect(runDefault(code, { dependencies })).toEqual('default said: foo.');
     expect(code).toMatch(/import myDefaultTarget from ['"]m['"]/);
+  });
+
+  test('emits new imports after preexisting other imports', () => {
+    let code = transform(`
+      import "whatever";
+
+      export default function() {
+        return myDefaultTarget('foo');
+      }
+      `);
+    expect(code).toEqualCode(`
+      import "whatever";
+      import myDefaultTarget from "m";
+      export default function () {
+        return myDefaultTarget("foo");
+      }
+    `);
+  });
+
+  test('emits added imports in the order they were added', () => {
+    let code = transform(`
+      export default function () {
+        myTarget();
+        second();
+      }
+    `);
+    expect(code).toEqualCode(`
+      import { thing } from "m";
+      import { thing as thing0 } from "n";
+      export default function () {
+        thing();
+        thing0();
+      }
+    `);
   });
 
   test('can generate a namespace import', () => {

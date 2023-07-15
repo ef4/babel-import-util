@@ -63,22 +63,17 @@ export class ImportUtil {
         return this.addSpecifier(target, declaration, exportedName, nameHint);
       }
     } else {
-      this.program.node.body.unshift(
+      let declaration = this.insertAfterExistingImports(
         this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
       );
-      return this.addSpecifier(
-        target,
-        this.program.get(`body.0`) as NodePath<t.ImportDeclaration>,
-        exportedName,
-        nameHint
-      );
+      return this.addSpecifier(target, declaration, exportedName, nameHint);
     }
   }
 
   importForSideEffect(moduleSpecifier: string): void {
     let declaration = this.findImportFrom(moduleSpecifier);
     if (!declaration) {
-      this.program.node.body.unshift(
+      this.insertAfterExistingImports(
         this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
       );
     }
@@ -120,6 +115,26 @@ export class ImportUtil {
       }
     }
     return undefined;
+  }
+
+  private insertAfterExistingImports<S extends t.Statement>(statement: S): NodePath<S> {
+    let lastIndex: number | undefined;
+    for (let [index, node] of this.program.node.body.entries()) {
+      if (node.type === 'ImportDeclaration') {
+        lastIndex = index;
+      }
+    }
+    if (lastIndex == null) {
+      // we are intentionally not using babel's container-aware methods, because
+      // while in theory it's nice that they schedule other plugins to run on
+      // our nodes, in practice those nodes might get mutated or removed by some
+      // other plugin in the intervening time causing failures.
+      this.program.node.body.unshift(statement);
+      return this.program.get('body.0') as NodePath<S>;
+    } else {
+      this.program.node.body.splice(lastIndex + 1, 0, statement);
+      return this.program.get(`body.${lastIndex + 1}`) as NodePath<S>;
+    }
   }
 }
 
