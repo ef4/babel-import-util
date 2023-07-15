@@ -1,3 +1,14 @@
+# 2.0.0
+
+- BREAKING: emit imports in a more intuitive order. Breaking because you may
+  have relied on the old order.
+
+# 1.4.1
+
+- REVERT: I decided to release this feature as a major instead, so this is a
+  republish of 1.3.0. It's too surprising for people's code evaluation order to
+  change on a minor.
+
 # 1.4.0
 
 - FEATURE: pick a more intuitive order for the emitted import statements.
