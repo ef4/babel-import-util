@@ -1,3 +1,7 @@
+# 1.4.0
+
+- FEATURE: pick a more intuitive order for the emitted import statements.
+
 # 1.3.0
 
 - FEATURE: automatically ensure that nameHints result in valid Javascript identifiers, so that callers don't need to bother about it.
