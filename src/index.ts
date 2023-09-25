@@ -89,7 +89,11 @@ export class ImportUtil {
       unusedNameLike(target, desiredName(nameHint, exportedName, target))
     );
     let specifier = this.buildSpecifier(exportedName, local);
-    declaration.node.specifiers.push(specifier);
+    if (specifier.type === 'ImportDefaultSpecifier') {
+      declaration.node.specifiers.unshift(specifier);
+    } else {
+      declaration.node.specifiers.push(specifier);
+    }
     declaration.scope.registerBinding(
       'module',
       declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath

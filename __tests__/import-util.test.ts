@@ -155,11 +155,13 @@ function importUtilTests(transform: (code: string) => string) {
   test('multiple uses share an import', () => {
     let code = transform(`
       export default function() {
-        return myTarget("a") + " | " + myTarget("b");
+        return myTarget("a") + " | " + myTarget("b") + " | " + myDefaultTarget("c");
       }
       `);
-    expect(runDefault(code, { dependencies })).toEqual('you said: a. | you said: b.');
-    expect(code).toMatch(/import \{ thing \} from ['"]m['"]/);
+    expect(code).toMatch(/import myDefaultTarget, \{ thing \} from ['"]m['"]/);
+    expect(runDefault(code, { dependencies })).toEqual(
+      'you said: a. | you said: b. | default said: c.'
+    );
     expect(code.match(/import/g)?.length).toEqual(1);
   });
 
