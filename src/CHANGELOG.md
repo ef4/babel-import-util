@@ -1,3 +1,7 @@
+# 2.0.1
+
+- BUGFIX: default imports could get inserted wrong when there are preexisting named imports
+
 # 2.0.0
 
 - BREAKING: emit imports in a more intuitive order. Breaking because you may
