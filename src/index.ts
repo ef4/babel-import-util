@@ -52,8 +52,22 @@ export class ImportUtil {
     // Optional hint for helping us pick a name for the imported binding
     nameHint?: string
   ): t.Identifier {
+    let isNamespaceImport = exportedName === '*';
+    let isDefaultImport = exportedName === 'default';
+    let isNamedImport = !isDefaultImport && !isNamespaceImport;
     let declaration = this.findImportFrom(moduleSpecifier);
-    if (declaration) {
+    let hasNamespaceSpecifier = declaration?.node.specifiers.find(
+      (s) => s.type === 'ImportNamespaceSpecifier'
+    );
+    let hasNamedSpecifiers = declaration?.node.specifiers.find((s) => s.type === 'ImportSpecifier');
+    /**
+     * the file has a preexisting non-namespace import and a transform tries to add a namespace import, so they don't get combined
+     * the file has a preexisting namespace import and a transform tries to add a non-namespace import, so they don't get combined
+     * the file has a preexisting namespace import and a transform tries to add a namespace import, so they get combined
+     */
+    let cannotUseExistingDeclaration =
+      (hasNamedSpecifiers && isNamespaceImport) || (hasNamespaceSpecifier && isNamedImport);
+    if (!cannotUseExistingDeclaration && declaration) {
       let specifier = declaration
         .get('specifiers')
         .find((spec) => matchSpecifier(spec, exportedName));
