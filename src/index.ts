@@ -60,13 +60,17 @@ export class ImportUtil {
       (s) => s.type === 'ImportNamespaceSpecifier'
     );
     let hasNamedSpecifiers = declaration?.node.specifiers.find((s) => s.type === 'ImportSpecifier');
+
     /**
      * the file has a preexisting non-namespace import and a transform tries to add a namespace import, so they don't get combined
      * the file has a preexisting namespace import and a transform tries to add a non-namespace import, so they don't get combined
-     * the file has a preexisting namespace import and a transform tries to add a namespace import, so they get combined
+     * the file has a preexisting namespace import and a transform tries to add a namespace import, so they don't get combined
      */
     let cannotUseExistingDeclaration =
-      (hasNamedSpecifiers && isNamespaceImport) || (hasNamespaceSpecifier && isNamedImport);
+      (hasNamedSpecifiers && isNamespaceImport) ||
+      (hasNamespaceSpecifier && isNamedImport) ||
+      (hasNamespaceSpecifier && isNamespaceImport);
+
     if (!cannotUseExistingDeclaration && declaration) {
       let specifier = declaration
         .get('specifiers')
