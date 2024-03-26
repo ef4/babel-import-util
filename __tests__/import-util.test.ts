@@ -87,6 +87,69 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code).toMatch(/import \* as myNamespaceTarget from ['"]m['"]/);
   });
 
+  test('namespace binding avoids namespace imports', () => {
+    let code = transform(`
+      import * as foo from 'm';
+      export default function(foo) {
+        return myNamespaceTarget.thing('a') + " " + myNamespaceTarget.default('b');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('you said: a. default said: b.');
+    expect(code).toMatch(/import \* as myNamespaceTarget from ['"]m['"]/);
+  });
+
+  test('namespace binding avoids named imports', () => {
+    let code = transform(`
+      import { x } from 'm';
+      export default function() {
+        return myNamespaceTarget.thing('a') + " " + myNamespaceTarget.default('b');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('you said: a. default said: b.');
+    expect(code).toMatch(/import \* as myNamespaceTarget from ['"]m['"]/);
+  });
+
+  test('namespace binding uses namespaced imports', () => {
+    let code = transform(`
+      import * as b from 'm';
+      export default function() {
+        return myNamespaceTarget.thing('a') + " " + myNamespaceTarget.default('b');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('you said: a. default said: b.');
+    expect(code).toMatch(/import \* as b from ['"]m['"]/);
+  });
+
+  test('namespace binding uses default imports', () => {
+    let code = transform(`
+      import b from 'm';
+      export default function() {
+        return myNamespaceTarget.thing('a') + " " + myNamespaceTarget.default('b');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('you said: a. default said: b.');
+    expect(code).toMatch(/import b, \* as myNamespaceTarget from ['"]m['"]/);
+  });
+
+  test('named binding avoids namespace import', () => {
+    let code = transform(`
+      import * as x from 'm';
+      export default function () {
+        myTarget();
+        second();
+      }
+    `);
+    expect(code).toEqualCode(`
+      import * as x from 'm';
+      import { thing } from "m";
+      import { thing as thing0 } from "n";
+      export default function () {
+        thing();
+        thing0();
+      }
+    `);
+  });
+
   test('can use an optional name hint', () => {
     let code = transform(`
       export default function() {
