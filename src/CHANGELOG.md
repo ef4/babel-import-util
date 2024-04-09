@@ -1,3 +1,7 @@
+# 2.0.2
+
+- BUGFIX: don't attempt to merge namespace and non-namespace import declarations.
+
 # 2.0.1
 
 - BUGFIX: default imports could get inserted wrong when there are preexisting named imports
