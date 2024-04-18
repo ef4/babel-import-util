@@ -1,6 +1,6 @@
 {
   "name": "babel-import-util",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Utility for manipulating imports within babel plugins",
   "repository": "https://github.com/ef4/babel-import-util",
   "license": "MIT",
