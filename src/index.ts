@@ -132,7 +132,11 @@ export class ImportUtil {
 
   private findImportFrom(moduleSpecifier: string): NodePath<t.ImportDeclaration> | undefined {
     for (let path of this.program.get('body')) {
-      if (path.isImportDeclaration() && path.node.source.value === moduleSpecifier) {
+      if (
+        path.isImportDeclaration() &&
+        path.node.source.value === moduleSpecifier &&
+        path.node.importKind !== 'type'
+      ) {
         return path;
       }
     }

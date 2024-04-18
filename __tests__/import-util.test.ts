@@ -1,6 +1,8 @@
 import { allBabelVersions, runDefault } from './test-support';
 import { ImportUtil } from '../src/index';
 import type { NodePath } from '@babel/traverse';
+// @ts-ignore no upstream types
+import TSSyntax from '@babel/plugin-syntax-typescript';
 import type * as t from '@babel/types';
 import 'code-equality-assertions/jest';
 
@@ -192,6 +194,22 @@ function importUtilTests(transform: (code: string) => string) {
     expect(code.match(/import/g)?.length).toEqual(1);
   });
 
+  test('does not use an existing type-only import', () => {
+    let code = transform(`
+      import type { thing } from 'm';
+      export default function() {
+        return myTarget('foo');
+      }
+      `);
+    expect(code).toEqualCode(`
+      import type { thing } from 'm';
+      import { thing as thing0 } from 'm';
+      export default function () {
+        return thing0('foo');
+      }
+    `);
+  });
+
   test('adds to an existing import', () => {
     let code = transform(`
       import { other } from 'm';
@@ -202,6 +220,37 @@ function importUtilTests(transform: (code: string) => string) {
     expect(runDefault(code, { dependencies })).toEqual('you said: foo.');
     expect(code.match(/import/g)?.length).toEqual(1);
     expect(code).toMatch(/import \{ other, thing \} from ['"]m['"]/);
+  });
+
+  test('does not add to an existing type-only import', () => {
+    let code = transform(`
+      import type { other } from 'm';
+      export default function() {
+        return myTarget('foo');
+      }
+      `);
+    expect(code).toEqualCode(`
+      import type { other } from 'm';
+      import { thing } from 'm';
+      export default function () {
+        return thing('foo');
+      }
+    `);
+  });
+
+  test('adds to an existing value import with an unrelated type-only specifier', () => {
+    let code = transform(`
+      import { type other } from 'm';
+      export default function() {
+        return myTarget('foo');
+      }
+      `);
+    expect(code).toEqualCode(`
+      import { type other, thing } from 'm';
+      export default function () {
+        return thing('foo');
+      }
+    `);
   });
 
   test('subsequent imports avoid previously created bindings', () => {
@@ -364,7 +413,7 @@ describe('import-adder', () => {
   allBabelVersions({
     babelConfig() {
       return {
-        plugins: [testTransform],
+        plugins: [testTransform, TSSyntax],
       };
     },
     createTests: importUtilTests,
