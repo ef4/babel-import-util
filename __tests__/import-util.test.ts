@@ -1,12 +1,46 @@
-import { allBabelVersions, runDefault } from './test-support';
+import { runDefault } from './test-support';
 import { ImportUtil } from '../src/index';
-import type { NodePath } from '@babel/traverse';
+import type * as Babel from '@babel/core';
+import type { PluginObj, TransformOptions, PluginItem, Visitor } from '@babel/core';
+import { transform as transform7 } from '@babel/core';
 // @ts-ignore no upstream types
 import TSSyntax from '@babel/plugin-syntax-typescript';
-import type * as t from '@babel/types';
 import 'code-equality-assertions/jest';
 
-function importUtilTests(transform: (code: string) => string) {
+describe('ImportUtil', () => {
+  let testTransform: PluginItem | undefined;
+  let t: typeof Babel.types;
+
+  function makePlugin(visitor: Visitor<State>) {
+    testTransform = function testTransform(babel: typeof Babel): PluginObj<State> {
+      t = babel.types;
+      return {
+        visitor: {
+          ...visitor,
+          Program: {
+            enter(path, state) {
+              state.util = new ImportUtil(babel, path);
+            },
+            ...(visitor.Program ?? {}),
+          },
+        },
+      };
+    };
+  }
+
+  function transform(code: string) {
+    if (!testTransform) {
+      throw new Error(`each test must call makePlugin`);
+    }
+    let options7: TransformOptions = {
+      plugins: [testTransform, TSSyntax],
+    };
+    if (!options7.filename) {
+      options7.filename = 'sample.js';
+    }
+    return transform7(code, options7)!.code!;
+  }
+
   const dependencies = {
     m: {
       thing(arg: string) {
@@ -25,7 +59,22 @@ function importUtilTests(transform: (code: string) => string) {
     },
   };
 
+  afterEach(() => {
+    testTransform = undefined;
+  });
+
   test('can generate an import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myTarget('foo');
@@ -36,6 +85,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can generate a default import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myDefaultTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'default'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myDefaultTarget('foo');
@@ -46,6 +106,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('emits new imports after preexisting other imports', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myDefaultTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'default'));
+        }
+      },
+    });
     let code = transform(`
       import "whatever";
 
@@ -63,6 +134,19 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('emits added imports in the order they were added', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        } else if (callee.node.name === 'second') {
+          state.util.replaceWith(callee, (i) => i.import('n', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       export default function () {
         myTarget();
@@ -80,6 +164,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can generate a namespace import', () => {
+    makePlugin({
+      MemberExpression(path, state) {
+        let obj = path.get('object');
+        if (!obj.isIdentifier()) {
+          return;
+        }
+        if (obj.node.name === 'myNamespaceTarget') {
+          state.util.replaceWith(obj, (i) => i.import('m', '*'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myNamespaceTarget.thing('a') + " " + myNamespaceTarget.default('b');
@@ -90,6 +185,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('namespace binding avoids namespace imports', () => {
+    makePlugin({
+      MemberExpression(path, state) {
+        let obj = path.get('object');
+        if (!obj.isIdentifier()) {
+          return;
+        }
+        if (obj.node.name === 'myNamespaceTarget') {
+          state.util.replaceWith(obj, (i) => i.import('m', '*'));
+        }
+      },
+    });
     let code = transform(`
       import * as foo from 'm';
       export default function(foo) {
@@ -101,6 +207,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('namespace binding avoids named imports', () => {
+    makePlugin({
+      MemberExpression(path, state) {
+        let obj = path.get('object');
+        if (!obj.isIdentifier()) {
+          return;
+        }
+        if (obj.node.name === 'myNamespaceTarget') {
+          state.util.replaceWith(obj, (i) => i.import('m', '*'));
+        }
+      },
+    });
     let code = transform(`
       import { x } from 'm';
       export default function() {
@@ -112,6 +229,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('namespace binding uses namespaced imports', () => {
+    makePlugin({
+      MemberExpression(path, state) {
+        let obj = path.get('object');
+        if (!obj.isIdentifier()) {
+          return;
+        }
+        if (obj.node.name === 'myNamespaceTarget') {
+          state.util.replaceWith(obj, (i) => i.import('m', '*'));
+        }
+      },
+    });
     let code = transform(`
       import * as b from 'm';
       export default function() {
@@ -123,6 +251,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('namespace binding uses default imports', () => {
+    makePlugin({
+      MemberExpression(path, state) {
+        let obj = path.get('object');
+        if (!obj.isIdentifier()) {
+          return;
+        }
+        if (obj.node.name === 'myNamespaceTarget') {
+          state.util.replaceWith(obj, (i) => i.import('m', '*'));
+        }
+      },
+    });
     let code = transform(`
       import b from 'm';
       export default function() {
@@ -134,6 +273,19 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('named binding avoids namespace import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        } else if (callee.node.name === 'second') {
+          state.util.replaceWith(callee, (i) => i.import('n', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       import * as x from 'm';
       export default function () {
@@ -153,6 +305,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can use an optional name hint', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myHintTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'default', 'HINT'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myHintTarget('foo');
@@ -163,6 +326,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('sanitizes name hint to make it a valid javascript identifier', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myMessyHintTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'default', 'this-is: the hint!'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myMessyHintTarget('foo');
@@ -173,6 +347,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('avoids an existing local binding', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         let thing = 'hello';
@@ -184,6 +369,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('uses an existing import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       import { thing } from 'm';
       export default function() {
@@ -195,6 +391,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('does not use an existing type-only import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       import type { thing } from 'm';
       export default function() {
@@ -211,6 +418,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('adds to an existing import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       import { other } from 'm';
       export default function() {
@@ -223,6 +441,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('does not add to an existing type-only import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       import type { other } from 'm';
       export default function() {
@@ -239,6 +468,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('adds to an existing value import with an unrelated type-only specifier', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       import { type other } from 'm';
       export default function() {
@@ -254,6 +494,19 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('subsequent imports avoid previously created bindings', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        } else if (callee.node.name === 'second') {
+          state.util.replaceWith(callee, (i) => i.import('n', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myTarget("a") + " | " + second("b");
@@ -265,6 +518,19 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('multiple uses share an import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        } else if (callee.node.name === 'myDefaultTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'default'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         return myTarget("a") + " | " + myTarget("b") + " | " + myDefaultTarget("c");
@@ -278,6 +544,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('multiple uses in different scopes share a specifier', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       function a() {
         return myTarget('a');
@@ -295,6 +572,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('resolves conflicts between different local scope collisions', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'thing'));
+        }
+      },
+    });
     let code = transform(`
       export default function() {
         let first = myTarget("a");
@@ -310,6 +598,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can add a side-effect import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'needsSideEffectThing') {
+          state.util.importForSideEffect('side-effect-thing');
+        }
+      },
+    });
     let code = transform(`
       needsSideEffectThing();
     `);
@@ -317,6 +616,17 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('side-effect import has no effect on existing import', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'needsSideEffectThing') {
+          state.util.importForSideEffect('side-effect-thing');
+        }
+      },
+    });
     let code = transform(`
       import x from 'side-effect-thing';
       needsSideEffectThing();
@@ -326,6 +636,13 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can remove one specifier', () => {
+    makePlugin({
+      Program: {
+        exit(_path, state) {
+          state.util.removeImport('whatever', 'a');
+        },
+      },
+    });
     let code = transform(`
       import { a, b } from 'whatever';
       import other from 'x';
@@ -335,6 +652,13 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can remove whole statement', () => {
+    makePlugin({
+      Program: {
+        exit(_path, state) {
+          state.util.removeImport('whatever', 'a');
+        },
+      },
+    });
     let code = transform(`
       import { a } from 'whatever';
       import other from 'x';
@@ -344,6 +668,13 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can remove namespace import', () => {
+    makePlugin({
+      Program: {
+        exit(_path, state) {
+          state.util.removeImport('remove-my-namespace', '*');
+        },
+      },
+    });
     let code = transform(`
       import * as a from 'remove-my-namespace';
       import * as other from 'x';
@@ -353,69 +684,124 @@ function importUtilTests(transform: (code: string) => string) {
   });
 
   test('can remove all imports', () => {
+    makePlugin({
+      Program: {
+        exit(_path, state) {
+          state.util.removeAllImports('remove-all');
+        },
+      },
+    });
     let code = transform(`
       import 'remove-all';
     `);
     expect(code).not.toMatch(/remove-all/);
   });
-}
 
-interface State {
-  adder: ImportUtil;
-}
-
-function testTransform(babel: { types: typeof t }): unknown {
-  return {
-    visitor: {
-      Program: {
-        enter(path: NodePath<t.Program>, state: State) {
-          state.adder = new ImportUtil(babel.types, path);
-        },
-        exit(_path: NodePath<t.Program>, state: State) {
-          state.adder.removeImport('whatever', 'a');
-          state.adder.removeImport('remove-my-namespace', '*');
-          state.adder.removeAllImports('remove-all');
-        },
-      },
-      CallExpression(path: NodePath<t.CallExpression>, state: State) {
+  test('inserts identifier correctly when replacing a larger expression', () => {
+    makePlugin({
+      CallExpression(path, state) {
         let callee = path.get('callee');
         if (!callee.isIdentifier()) {
           return;
         }
-        if (callee.node.name === 'myTarget') {
-          callee.replaceWith(state.adder.import(callee, 'm', 'thing'));
-        } else if (callee.node.name === 'second') {
-          callee.replaceWith(state.adder.import(callee, 'n', 'thing'));
-        } else if (callee.node.name === 'myDefaultTarget') {
-          callee.replaceWith(state.adder.import(callee, 'm', 'default'));
-        } else if (callee.node.name === 'myHintTarget') {
-          callee.replaceWith(state.adder.import(callee, 'm', 'default', 'HINT'));
-        } else if (callee.node.name === 'myMessyHintTarget') {
-          callee.replaceWith(state.adder.import(callee, 'm', 'default', 'this-is: the hint!'));
-        } else if (callee.node.name === 'needsSideEffectThing') {
-          state.adder.importForSideEffect('side-effect-thing');
+        if (callee.node.name === 'replacesWholeExpression') {
+          state.util.replaceWith(path, (i) =>
+            t.callExpression(i.import('m', 'impl'), [t.stringLiteral('x')])
+          );
         }
       },
-      MemberExpression(path: NodePath<t.MemberExpression>, state: State) {
-        let obj = path.get('object');
-        if (!obj.isIdentifier()) {
+    });
+    let code = transform(`
+      replacesWholeExpression()
+    `);
+    expect(code).toEqualCode(`
+      import { impl } from 'm';
+      impl('x');
+    `);
+  });
+
+  test("handles scope collisions within the user's new expression", () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
           return;
         }
-        if (obj.node.name === 'myNamespaceTarget') {
-          obj.replaceWith(state.adder.import(obj, 'm', '*'));
+        if (callee.node.name === 'target') {
+          state.util.replaceWith(path, (i) =>
+            t.functionExpression(
+              null,
+              [t.identifier('impl')],
+              t.blockStatement([
+                t.expressionStatement(
+                  t.callExpression(i.import('m', 'impl'), [t.stringLiteral('x')])
+                ),
+              ])
+            )
+          );
         }
       },
-    },
-  };
-}
+    });
+    let code = transform(`
+      target()
+    `);
+    expect(code).toEqualCode(`
+      import { impl as impl0} from 'm';
+      (function (impl) {
+        impl0("x");
+      });
+    `);
+  });
 
-describe('import-adder', () => {
-  allBabelVersions({
-    babelConfig() {
-      return {
-        plugins: [testTransform, TSSyntax],
-      };
-    },
-    createTests: importUtilTests,
+  test('can insertsAfter', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'target') {
+          state.util.insertAfter(path, (i) =>
+            t.callExpression(i.import('m', 'impl'), [t.stringLiteral('x')])
+          );
+        }
+      },
+    });
+    let code = transform(`
+      target()
+    `);
+    expect(code).toEqualCode(`
+      import { impl } from 'm';
+      target();
+      impl('x');
+    `);
+  });
+
+  test('can insertBefore', () => {
+    makePlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'target') {
+          state.util.insertBefore(path, (i) =>
+            t.callExpression(i.import('m', 'impl'), [t.stringLiteral('x')])
+          );
+        }
+      },
+    });
+    let code = transform(`
+      target()
+    `);
+    expect(code).toEqualCode(`
+      import { impl } from 'm';
+      impl('x');
+      target();
+    `);
   });
 });
+
+interface State {
+  util: ImportUtil;
+}

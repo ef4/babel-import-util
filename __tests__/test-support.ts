@@ -1,5 +1,5 @@
 import 'jest';
-import { transform as transform7, TransformOptions as Options7 } from '@babel/core';
+import { transform as transform7 } from '@babel/core';
 import { createContext, Script } from 'vm';
 
 interface RunDefaultOptions {
@@ -34,61 +34,8 @@ export function runDefault(code: string, opts: RunDefaultOptions = {}): any {
   return context.exports.default();
 }
 
-function presetsFor(_major: 7) {
-  return [
-    [
-      require.resolve('@babel/preset-env'),
-      {
-        modules: false,
-        targets: {
-          ie: '11.0.0',
-        },
-      },
-    ],
-  ];
-}
-
 export interface Transform {
   (code: string, opts?: { filename?: string }): string;
   babelMajorVersion: 6 | 7;
   usingPresets: boolean;
-}
-
-export function allBabelVersions(params: {
-  babelConfig(major: 7): Options7;
-  createTests(transform: Transform): void;
-  includePresetsTests?: boolean;
-}) {
-  function versions(usePresets: boolean) {
-    describe('babel7', function () {
-      function transform(code: string, opts?: { filename?: string }) {
-        let options7: Options7 = params.babelConfig(7);
-        if (!options7.filename) {
-          options7.filename = 'sample.js';
-        }
-        if (usePresets) {
-          options7.presets = presetsFor(7);
-        }
-        if (opts && opts.filename) {
-          options7.filename = opts.filename;
-        }
-
-        return transform7(code, options7)!.code!;
-      }
-      transform.babelMajorVersion = 7 as const;
-      transform.usingPresets = usePresets;
-      params.createTests(transform);
-    });
-  }
-
-  if (params.includePresetsTests) {
-    describe('with presets', function () {
-      versions(true);
-    });
-    describe('without presets', function () {
-      versions(false);
-    });
-  } else {
-    versions(false);
-  }
 }
