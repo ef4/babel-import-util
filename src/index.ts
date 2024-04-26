@@ -1,10 +1,12 @@
-import type { NodePath } from '@babel/traverse';
-import type * as t from '@babel/types';
-
-type BabelTypes = typeof t;
+import type * as Babel from '@babel/core';
+import type { types as t, NodePath } from '@babel/core';
 
 export class ImportUtil {
-  constructor(private t: BabelTypes, private program: NodePath<t.Program>) {}
+  private t: typeof Babel.types;
+
+  constructor(private babel: typeof Babel, private program: NodePath<t.Program>) {
+    this.t = babel.types;
+  }
 
   // remove one imported binding. If this is the last thing imported from the
   // given moduleSpecifier, the whole statement will also be removed.
@@ -38,6 +40,12 @@ export class ImportUtil {
 
   // Import the given value (if needed) and return an Identifier representing
   // it.
+  //
+  // This method is trickier to use safely than our higher-level methods
+  // (`insertAfter`, `insertBefore`, `replaceWith`, `mutate`) because after you
+  // insert the identifier into the AST, it's up to you to ensure that babel's
+  // scope system is aware of the new reference. The other methods do that for
+  // you automatically.
   import(
     // the spot at which you will insert the Identifier we return to you
     target: NodePath<t.Node>,
@@ -51,6 +59,31 @@ export class ImportUtil {
 
     // Optional hint for helping us pick a name for the imported binding
     nameHint?: string
+  ): t.Identifier {
+    return this.unreferencedImport(
+      target,
+      moduleSpecifier,
+      exportedName,
+      desiredName(nameHint, exportedName, defaultNameHint(target))
+    );
+  }
+
+  // Import the given value (if needed) and return an Identifier representing
+  // it.
+  private unreferencedImport(
+    // the spot at which you will insert the Identifier we return to you
+    target: NodePath<t.Node>,
+
+    // the path to the module you're importing from
+    moduleSpecifier: string,
+
+    // the name you're importing from that module. Use "default" for the default
+    // export. Use "*" for the namespace.
+    exportedName: string,
+
+    // the preferred name you want, if we neeed to create a new binding. You
+    // might get something similar instead, to avoid collisions.
+    preferredName: string
   ): t.Identifier {
     let isNamespaceImport = exportedName === '*';
     let isDefaultImport = exportedName === 'default';
@@ -78,13 +111,13 @@ export class ImportUtil {
       if (specifier && target.scope.getBinding(specifier.node.local.name)?.kind === 'module') {
         return this.t.identifier(specifier.node.local.name);
       } else {
-        return this.addSpecifier(target, declaration, exportedName, nameHint);
+        return this.addSpecifier(target, declaration, exportedName, preferredName);
       }
     } else {
       let declaration = this.insertAfterExistingImports(
         this.t.importDeclaration([], this.t.stringLiteral(moduleSpecifier))
       );
-      return this.addSpecifier(target, declaration, exportedName, nameHint);
+      return this.addSpecifier(target, declaration, exportedName, preferredName);
     }
   }
 
@@ -97,25 +130,112 @@ export class ImportUtil {
     }
   }
 
+  replaceWith<T extends t.Node, R extends t.Node>(
+    target: NodePath<T>,
+    fn: (i: Importer) => R
+  ): NodePath<R> {
+    return this.mutate((i) => {
+      target.replaceWith(fn(i));
+      // the return value of replaceWith is not a reliable way to get the
+      // updated path, at least in the case where the user replaced an
+      // expression with a statement. Instead we will rely on the fact that path
+      // replacement also mutates its argument, so `target` now points at the
+      // newly replaced path.
+      return target as unknown as NodePath<R>;
+    }, defaultNameHint(target));
+  }
+
+  insertAfter<T extends t.Node, R extends t.Node>(
+    target: NodePath<T>,
+    fn: (i: Importer) => R
+  ): NodePath<R> {
+    return this.mutate((i) => target.insertAfter(fn(i))[0] as NodePath<R>, defaultNameHint(target));
+  }
+
+  insertBefore<T extends t.Node, R extends t.Node>(
+    target: NodePath<T>,
+    fn: (i: Importer) => R
+  ): NodePath<R> {
+    return this.mutate(
+      (i) => target.insertBefore(fn(i))[0] as NodePath<R>,
+      defaultNameHint(target)
+    );
+  }
+
+  // Low-level method for when you don't want to use our higher-level methods
+  // (replaceWith, insertBefore, insertAfter)
+  mutate<Replacement extends t.Node>(
+    fn: (importer: Importer) => NodePath<Replacement>,
+    defaultNameHint?: string
+  ): NodePath<Replacement> {
+    let symbols: Map<
+      t.Identifier,
+      { moduleSpecifier: string; exportedName: string; nameHint: string | undefined }
+    > = new Map();
+    const importer: Importer = {
+      import: (moduleSpecifier: string, exportedName: string, nameHint?: string) => {
+        let identifier = this.t.identifier('__babel_import_util_placeholder__');
+        symbols.set(identifier, { moduleSpecifier, exportedName, nameHint });
+        return identifier;
+      },
+    };
+
+    const updateReference = (path: NodePath) => {
+      if (!path.isIdentifier()) {
+        return;
+      }
+      let hit = symbols.get(path.node);
+      if (hit) {
+        let newIdentifier = this.unreferencedImport(
+          path,
+          hit.moduleSpecifier,
+          hit.exportedName,
+          desiredName(hit.nameHint, hit.exportedName, defaultNameHint)
+        );
+        path.replaceWith(newIdentifier);
+        let binding = path.scope.getBinding(newIdentifier.name);
+        if (!binding) {
+          // we create the binding at the point where we add the import, so this
+          // would indicate broken behavior
+          throw new Error(`bug: this is supposed to never happen`);
+        }
+        binding.reference(path);
+      }
+    };
+
+    let result = fn(importer);
+    updateReference(result);
+    this.babel.traverse(
+      result.node,
+      {
+        ReferencedIdentifier: (path) => {
+          updateReference(path);
+        },
+      },
+      result.scope,
+      {},
+      result
+    );
+    return result;
+  }
+
   private addSpecifier(
     target: NodePath<t.Node>,
     declaration: NodePath<t.ImportDeclaration>,
     exportedName: string,
-    nameHint: string | undefined
+    preferredName: string
   ): t.Identifier {
-    let local = this.t.identifier(
-      unusedNameLike(target, desiredName(nameHint, exportedName, target))
-    );
+    let local = this.t.identifier(unusedNameLike(target, preferredName));
     let specifier = this.buildSpecifier(exportedName, local);
+    let added: NodePath;
     if (specifier.type === 'ImportDefaultSpecifier') {
       declaration.node.specifiers.unshift(specifier);
+      added = declaration.get(`specifiers.0`) as NodePath;
     } else {
       declaration.node.specifiers.push(specifier);
+      added = declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath;
     }
-    declaration.scope.registerBinding(
-      'module',
-      declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath
-    );
+    declaration.scope.registerBinding('module', added);
     return local;
   }
 
@@ -181,7 +301,11 @@ function name(node: t.StringLiteral | t.Identifier): string {
   }
 }
 
-function desiredName(nameHint: string | undefined, exportedName: string, target: NodePath<t.Node>) {
+function desiredName(
+  nameHint: string | undefined,
+  exportedName: string,
+  defaultNameHint: string | undefined
+) {
   if (nameHint) {
     // first we opportunistically do camelization when an illegal character is
     // followed by a lowercase letter, in an effort to aid readability of the
@@ -192,13 +316,19 @@ function desiredName(nameHint: string | undefined, exportedName: string, target:
     return cleaned;
   }
   if (exportedName === 'default' || exportedName === '*') {
-    if (target.isIdentifier()) {
-      return target.node.name;
-    } else {
-      return target.scope.generateUidIdentifierBasedOnNode(target.node).name;
-    }
+    return defaultNameHint ?? 'a';
   } else {
     return exportedName;
+  }
+}
+
+function defaultNameHint(target: NodePath): string | undefined {
+  if (target?.isIdentifier()) {
+    return target.node.name;
+  } else if (target) {
+    return target.scope.generateUidIdentifierBasedOnNode(target.node).name;
+  } else {
+    return undefined;
   }
 }
 
@@ -218,4 +348,20 @@ function matchModule(
   moduleSpecifier: string
 ): path is NodePath<t.ImportDeclaration> {
   return path.isImportDeclaration() && path.get('source').node.value === moduleSpecifier;
+}
+
+export interface Importer {
+  // Import the given value (if needed) and return an Identifier representing
+  // it.
+  import(
+    // the path to the module you're importing from
+    moduleSpecifier: string,
+
+    // the name you're importing from that module. Use "default" for the default
+    // export. Use "*" for the namespace.
+    exportedName: string,
+
+    // Optional hint for helping us pick a name for the imported binding
+    nameHint?: string
+  ): t.Identifier;
 }
