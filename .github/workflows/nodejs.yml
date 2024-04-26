@@ -17,13 +17,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v4
         with:
           node-version: 16.x
-      - name: install yarn
-        run: npm install -g yarn
-      - name: install dependencies
-        run: yarn install
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - run: pnpm install --frozen-lockfile
       - name: linting
         run: yarn lint
 
@@ -37,13 +37,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
-      - name: install yarn
-        run: npm install -g yarn
-      - name: install dependencies
-        run: yarn install
+          node-version: 16.x
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - run: pnpm install --frozen-lockfile
       - name: test
         run: yarn test
 
@@ -53,12 +53,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v4
         with:
-          node-version: '16.x'
-      - name: install yarn
-        run: npm install -g yarn
-      - name: install dependencies
-        run: yarn install --no-lockfile
+          node-version: 16.x
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - run: pnpm install --no-lockfile
       - name: test
         run: yarn test
