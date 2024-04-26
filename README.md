@@ -30,7 +30,7 @@ function testTransform(babel) {
       Program: {
         enter(path, state) {
           // Always instantiate the ImportUtil instance at the Program scope
-          state.importUtil = new ImportUtil(babel.types, path);
+          state.importUtil = new ImportUtil(babel, path);
         },
       },
       CallExpression(path, state) {
