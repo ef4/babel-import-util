@@ -860,6 +860,32 @@ describe('ImportUtil', () => {
     expect(references.count).toEqual(1);
   });
 
+  test('can replace expression with statement', () => {
+    addPlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'target') {
+          state.util.replaceWith(path, (i) =>
+            t.expressionStatement(t.callExpression(i.import('m', 'impl'), [t.stringLiteral('x')]))
+          );
+        }
+      },
+    });
+    let references = countReferences('m', 'impl');
+
+    let code = transform(`
+      target()
+    `);
+    expect(code).toEqualCode(`
+      import { impl } from 'm';
+      impl('x');
+    `);
+    expect(references.count).toEqual(1);
+  });
+
   test('unreferenced import is unreferenced', () => {
     addPlugin({
       CallExpression(path, state) {

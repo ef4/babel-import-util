@@ -134,7 +134,15 @@ export class ImportUtil {
     target: NodePath<T>,
     fn: (i: Importer) => R
   ): NodePath<R> {
-    return this.mutate((i) => target.replaceWith(fn(i))[0], defaultNameHint(target));
+    return this.mutate((i) => {
+      target.replaceWith(fn(i));
+      // the return value of replaceWith is not a reliable way to get the
+      // updated path, at least in the case where the user replaced an
+      // expression with a statement. Instead we will rely on the fact that path
+      // replacement also mutates its argument, so `target` now points at the
+      // newly replaced path.
+      return target as unknown as NodePath<R>;
+    }, defaultNameHint(target));
   }
 
   insertAfter<T extends t.Node, R extends t.Node>(
