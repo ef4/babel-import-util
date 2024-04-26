@@ -1,0 +1,17 @@
+{
+  "solution": {
+    "babel-import-util": {
+      "impact": "minor",
+      "oldVersion": "2.0.3",
+      "newVersion": "2.1.0",
+      "constraints": [
+        {
+          "impact": "minor",
+          "reason": "Appears in changelog section :rocket: Enhancement"
+        }
+      ],
+      "pkgJSONPath": "./package.json"
+    }
+  },
+  "description": "## Release (2024-04-26)\n\nbabel-import-util 2.1.0 (minor)\n\n#### :rocket: Enhancement\n* `babel-import-util`\n  * [#13](https://github.com/ef4/babel-import-util/pull/13) Reference-aware API ([@ef4](https://github.com/ef4))\n\n#### Committers: 1\n- Edward Faulkner ([@ef4](https://github.com/ef4))\n"
+}
