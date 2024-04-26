@@ -38,6 +38,37 @@ export class ImportUtil {
     }
   }
 
+  /**
+   * @deprecated This method is error prone because we cannot automatically
+   * ensure that babel's scope system will createa reference to the identifier
+   * after you have inserted it somewhere. The newer methods `insertBefore`,
+   * `insertAfter`, `replaceWith`, and `mutate` all provide more
+   * automatically-safe binding management.
+   */
+  // Import the given value (if needed) and return an Identifier representing
+  // it.
+  import(
+    // the spot at which you will insert the Identifier we return to you
+    target: NodePath<t.Node>,
+
+    // the path to the module you're importing from
+    moduleSpecifier: string,
+
+    // the name you're importing from that module. Use "default" for the default
+    // export. Use "*" for the namespace.
+    exportedName: string,
+
+    // Optional hint for helping us pick a name for the imported binding
+    nameHint?: string
+  ): t.Identifier {
+    return this.unreferencedImport(
+      target,
+      moduleSpecifier,
+      exportedName,
+      desiredName(nameHint, exportedName, defaultNameHint(target))
+    );
+  }
+
   // Import the given value (if needed) and return an Identifier representing
   // it.
   private unreferencedImport(
@@ -51,8 +82,8 @@ export class ImportUtil {
     // export. Use "*" for the namespace.
     exportedName: string,
 
-    // the preferred name you want for the new binding. You might get something
-    // similar instead, to avoid collisions.
+    // the preferred name you want, if we neeed to create a new binding. You
+    // might get something similar instead, to avoid collisions.
     preferredName: string
   ): t.Identifier {
     let isNamespaceImport = exportedName === '*';
@@ -154,8 +185,14 @@ export class ImportUtil {
           hit.exportedName,
           desiredName(hit.nameHint, hit.exportedName, defaultNameHint)
         );
-        let updated = path.replaceWith(newIdentifier);
-        updated[0].scope.crawl();
+        path.replaceWith(newIdentifier);
+        let binding = path.scope.getBinding(newIdentifier.name);
+        if (!binding) {
+          // we create the binding at the point where we add the import, so this
+          // would indicate broken behavior
+          throw new Error(`bug: this is supposed to never happen`);
+        }
+        binding.reference(path);
       }
     };
 
@@ -183,15 +220,15 @@ export class ImportUtil {
   ): t.Identifier {
     let local = this.t.identifier(unusedNameLike(target, preferredName));
     let specifier = this.buildSpecifier(exportedName, local);
+    let added: NodePath;
     if (specifier.type === 'ImportDefaultSpecifier') {
       declaration.node.specifiers.unshift(specifier);
+      added = declaration.get(`specifiers.0`) as NodePath;
     } else {
       declaration.node.specifiers.push(specifier);
+      added = declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath;
     }
-    declaration.scope.registerBinding(
-      'module',
-      declaration.get(`specifiers.${declaration.node.specifiers.length - 1}`) as NodePath
-    );
+    declaration.scope.registerBinding('module', added);
     return local;
   }
 
