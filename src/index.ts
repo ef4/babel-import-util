@@ -38,15 +38,14 @@ export class ImportUtil {
     }
   }
 
-  /**
-   * @deprecated This method is error prone because we cannot automatically
-   * ensure that babel's scope system will createa reference to the identifier
-   * after you have inserted it somewhere. The newer methods `insertBefore`,
-   * `insertAfter`, `replaceWith`, and `mutate` all provide more
-   * automatically-safe binding management.
-   */
   // Import the given value (if needed) and return an Identifier representing
   // it.
+  //
+  // This method is trickier to use safely than our higher-level methods
+  // (`insertAfter`, `insertBefore`, `replaceWith`, `mutate`) because after you
+  // insert the identifier into the AST, it's up to you to ensure that babel's
+  // scope system is aware of the new reference. The other methods do that for
+  // you automatically.
   import(
     // the spot at which you will insert the Identifier we return to you
     target: NodePath<t.Node>,
