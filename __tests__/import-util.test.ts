@@ -400,6 +400,27 @@ describe('ImportUtil', () => {
     expect(code).toMatch(/import thisIsTheHint from ['"]m['"]/);
   });
 
+  test('preserves non-leading numbers in name hints', () => {
+    addPlugin({
+      CallExpression(path, state) {
+        let callee = path.get('callee');
+        if (!callee.isIdentifier()) {
+          return;
+        }
+        if (callee.node.name === 'myMessyHintTarget') {
+          state.util.replaceWith(callee, (i) => i.import('m', 'default', 'i18n'));
+        }
+      },
+    });
+    let code = transform(`
+      export default function() {
+        return myMessyHintTarget('foo');
+      }
+      `);
+    expect(runDefault(code, { dependencies })).toEqual('default said: foo.');
+    expect(code).toMatch(/import i18n from ['"]m['"]/);
+  });
+
   test('avoids an existing local binding', () => {
     addPlugin({
       CallExpression(path, state) {
