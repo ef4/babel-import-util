@@ -1,5 +1,6 @@
 import type * as Babel from '@babel/core';
 import type { types as t, NodePath } from '@babel/core';
+import { sanitize } from './sanitize';
 
 export class ImportUtil {
   private t: typeof Babel.types;
@@ -307,13 +308,7 @@ function desiredName(
   defaultNameHint: string | undefined
 ) {
   if (nameHint) {
-    // first we opportunistically do camelization when an illegal character is
-    // followed by a lowercase letter, in an effort to aid readability of the
-    // output.
-    let cleaned = nameHint.replace(/[^a-zA-Z_]([a-z])/g, (_m, letter) => letter.toUpperCase());
-    // then we unliterally strip all remaining illegal characters.
-    cleaned = cleaned.replace(/[^a-zA-Z_]/g, '');
-    return cleaned;
+    return sanitize(nameHint);
   }
   if (exportedName === 'default' || exportedName === '*') {
     return defaultNameHint ?? 'a';
