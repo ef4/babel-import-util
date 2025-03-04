@@ -1,5 +1,16 @@
 # Changelog
 
+## Release (2025-03-04)
+
+babel-import-util 3.0.1 (patch)
+
+#### :bug: Bug Fix
+* `babel-import-util`
+  * [#16](https://github.com/ef4/babel-import-util/pull/16) Preserve non-leading numbers in name hints ([@ef4](https://github.com/ef4))
+
+#### Committers: 1
+- Edward Faulkner ([@ef4](https://github.com/ef4))
+
 ## Release (2024-04-26)
 
 babel-import-util 3.0.0 (major)
